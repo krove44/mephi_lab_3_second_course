@@ -6,7 +6,28 @@
 #include <stack>
 #include <algorithm>
 #include <stdexcept>
+#include <concepts>
 #include "../mephi_lab_2_second_course/mephi_lab_1_second_course/avl_tree.h"
+
+template <typename T>
+struct GraphNode {
+    using value_type = T;
+    T data{};
+
+    bool operator==(const GraphNode& other) const { return data == other.data; }
+    bool operator!=(const GraphNode& other) const { return data != other.data; }
+    bool operator<(const GraphNode& other) const { return data < other.data; }
+    bool operator>(const GraphNode& other) const { return data > other.data; }
+    bool operator<=(const GraphNode& other) const { return data <= other.data; }
+    bool operator>=(const GraphNode& other) const { return data >= other.data; }
+};
+
+template <typename E>
+struct GraphEdge {
+    using weight_type = E;
+    E weight{};
+    bool active{false};
+};
 
 template<typename K, typename V, typename D>
 concept SpecDictionary = requires (D dict, K key, V val) {
