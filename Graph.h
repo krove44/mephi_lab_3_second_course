@@ -43,5 +43,30 @@ public:
             }
         }
     }
+    /*  0 1 2
+    0 * x x x
+    1 * y y y
+    2 * z z z
+     *
+     * x x x y y y z z z
+     */
 
+    struct Node {
+        T data;
+        // metainfo
+    };
+
+    struct AdjacencyMatrix {
+    private:
+        Sequence<Node*>* adjs;
+
+        IDict <pair<Node, Node>, Edge> adjacency;
+
+    public:
+        bool Get(Node x, Node y);
+        bool Add(Node to, Node from);
+    };
+
+    AdjacencyMatrix adjacency;
+    Sequence<Node>* vertices;
 };
