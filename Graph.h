@@ -1,13 +1,13 @@
 #pragma once
 #include <utility>
 #include <optional>
-#include <vector>
 #include <queue>
 #include <stack>
 #include <algorithm>
 #include <stdexcept>
 #include <concepts>
-#include "../mephi_lab_2_second_course/mephi_lab_1_second_course/avl_tree.h"
+#include "../Libs/avl_tree.h"
+#include "../mephi_lab2/Sequence/ArraySequence.h"
 
 template <typename T>
 struct GraphNode {
@@ -26,13 +26,13 @@ template <typename E>
 struct GraphEdge {
     using weight_type = E;
     E weight{};
-    bool active{false};
 };
 
 template<typename K, typename V, typename D>
 concept SpecDictionary = requires (D dict, K key, V val) {
     {dict.find(key)} -> std::same_as<bool>;
     {dict.add(key, val)};
+    {dict.erase(key)};
     {dict.get(key)} -> std::convertible_to<V&>;
 };
 
@@ -42,7 +42,7 @@ class Graph {
 private:
     using Key = std::pair<NodeType, NodeType>;
     Dict matrix_;
-    std::vector<NodeType> vertices_;
+    ArraySequence<NodeType> vertices_;
     bool directed_;
 
     Key make_key(const NodeType& u, const NodeType& v) const {
@@ -64,31 +64,35 @@ public:
 
     bool has_vertex(const T& val) const {
         NodeType target{val};
-        return std::find(vertices_.begin(), vertices_.end(), target) != vertices_.end();
+        for (size_t i = 0; i < vertices_.GetLenght(); ++i) {
+            if (vertices_[i] == target) {
+                return true;
+            }
+        }
+        return false;
     }
 
     void add_vertex(const T& val) {
         if (!has_vertex(val)) {
-            vertices_.push_back(NodeType{val});
+            vertices_.Append(NodeType{val});
         }
     }
 
     void remove_vertex(const T& val) {
         NodeType target{val};
-        auto it = std::find(vertices_.begin(), vertices_.end(), target);
-        if (it == vertices_.end()) return;
+        for (size_t i = 0; i < vertices_.GetLenght(); ++i) {
+            if (vertices_[i] != target) continue;
 
-        for (const auto& v : vertices_) {
-            Key k1 = make_key(target, v);
-            if (matrix_.find(k1)) {
-                matrix_.get(k1).active = false;
+            for (size_t j = 0; j < vertices_.GetLenght(); ++j) {
+                const NodeType& v = vertices_[j];
+                matrix_.erase(make_key(target, v));
+                if (directed_) {
+                    matrix_.erase(make_key(v, target));
+                }
             }
-            Key k2 = make_key(v, target);
-            if (matrix_.find(k2)) {
-                matrix_.get(k2).active = false;
-            }
+            vertices_.EraseAt(i);
+            return;
         }
-        vertices_.erase(it);
     }
 
     void add_edge(const T& from, const T& to, const E& weight = E{}) {
@@ -98,26 +102,17 @@ public:
         if (matrix_.find(k)) {
             EdgeType& e = matrix_.get(k);
             e.weight = weight;
-            e.active = true;
         } else {
-            matrix_.add(k, EdgeType{weight, true});
+            matrix_.add(k, EdgeType{weight});
         }
     }
 
     void remove_edge(const T& from, const T& to) {
-        Key k = make_key(NodeType{from}, NodeType{to});
-        if (matrix_.find(k)) {
-            matrix_.get(k).active = false;
-        }
+        matrix_.erase(make_key(NodeType{from}, NodeType{to}));
     }
 
     bool has_edge(const T& from, const T& to) {
-        if (!has_vertex(from) || !has_vertex(to)) return false;
-        Key k = make_key(NodeType{from}, NodeType{to});
-        if (matrix_.find(k)) {
-            return matrix_.get(k).active;
-        }
-        return false;
+        return matrix_.find(make_key(NodeType{from}, NodeType{to}));
     }
 
     std::optional<E> get_edge(const T& from, const T& to) {
@@ -127,49 +122,47 @@ public:
         return std::nullopt;
     }
 
-    std::vector<T> get_vertices() const {
-        std::vector<T> res;
-        res.reserve(vertices_.size());
-        for (const auto& n : vertices_) {
-            res.push_back(n.data);
+    ArraySequence<T> get_vertices() const {
+        ArraySequence<T> res;
+        for (size_t i = 0; i < vertices_.GetLenght(); ++i) {
+            res.Append(vertices_[i].data);
         }
         return res;
     }
 
-    std::vector<T> get_neighbors(const T& val) {
-        std::vector<T> neighbors;
-        if (!has_vertex(val)) {
-            return neighbors;
-        }
-        for (const auto& v : vertices_) {
-            if (has_edge(val, v.data)) {
-                neighbors.push_back(v.data);
+    ArraySequence<T> get_neighbors(const T& val) {
+        ArraySequence<T> neighbors;
+        if (!has_vertex(val)) return neighbors;
+
+        for (size_t i = 0; i < vertices_.GetLenght(); ++i) {
+            const T& neighbor = vertices_[i].data;
+            if (has_edge(val, neighbor)) {
+                neighbors.Append(neighbor);
             }
         }
         return neighbors;
     }
 
-    std::vector<T> bfs(const T& start) {
-        std::vector<T> visited_order;
-        if (!has_vertex(start)) {
-            return visited_order;
-        }
+    ArraySequence<T> bfs(const T& start) {
+        ArraySequence<T> visited_order;
+        if (!has_vertex(start)) return visited_order;
 
         avl_tree<NodeType, bool> visited;
         std::queue<T> q;
-
         visited.add(NodeType{start}, true);
         q.push(start);
 
         while (!q.empty()) {
             T curr = q.front();
             q.pop();
-            visited_order.push_back(curr);
+            visited_order.Append(curr);
 
-            for (const auto& neighbor : get_neighbors(curr)) {
-                NodeType n_node{neighbor};
-                if (!visited.find(n_node)) {
-                    visited.add(n_node, true);
+            auto neighbors = get_neighbors(curr);
+            for (size_t i = 0; i < neighbors.GetLenght(); ++i) {
+                const T& neighbor = neighbors[i];
+                NodeType node{neighbor};
+                if (!visited.find(node)) {
+                    visited.add(node, true);
                     q.push(neighbor);
                 }
             }
@@ -177,28 +170,28 @@ public:
         return visited_order;
     }
 
-    std::vector<T> dfs(const T& start) {
-        std::vector<T> visited_order;
+    ArraySequence<T> dfs(const T& start) {
+        ArraySequence<T> visited_order;
         if (!has_vertex(start)) return visited_order;
 
         avl_tree<NodeType, bool> visited;
         std::stack<T> s;
-
         s.push(start);
 
         while (!s.empty()) {
             T curr = s.top();
             s.pop();
-            NodeType c_node{curr};
+            NodeType node{curr};
 
-            if (!visited.find(c_node)) {
-                visited.add(c_node, true);
-                visited_order.push_back(curr);
+            if (!visited.find(node)) {
+                visited.add(node, true);
+                visited_order.Append(curr);
 
                 auto neighbors = get_neighbors(curr);
-                for (auto it = neighbors.rbegin(); it != neighbors.rend(); ++it) {
-                    if (!visited.find(NodeType{*it})) {
-                        s.push(*it);
+                for (size_t i = neighbors.GetLenght(); i > 0; --i) {
+                    const T& neighbor = neighbors[i - 1];
+                    if (!visited.find(NodeType{neighbor})) {
+                        s.push(neighbor);
                     }
                 }
             }
@@ -206,51 +199,51 @@ public:
         return visited_order;
     }
 
-    std::vector<T> topological_sort() {
+    ArraySequence<T> topological_sort() {
         if (!directed_) {
             throw std::logic_error("не ориентированный граф!");
         }
 
         avl_tree<NodeType, int> in_degree;
-        for (const auto& u : vertices_) {
-            in_degree.add(u, 0);
+        for (size_t i = 0; i < vertices_.GetLenght(); ++i) {
+            in_degree.add(vertices_[i], 0);
         }
 
-        for (const auto& u : vertices_) {
-            for (const auto& v : vertices_) {
-                if (has_edge(u.data, v.data)) {
-                    in_degree.get(v) += 1;
+        for (size_t i = 0; i < vertices_.GetLenght(); ++i) {
+            for (size_t j = 0; j < vertices_.GetLenght(); ++j) {
+                if (has_edge(vertices_[i].data, vertices_[j].data)) {
+                    ++in_degree.get(vertices_[j]);
                 }
             }
         }
 
         std::queue<T> q;
-        for (const auto& u : vertices_) {
-            if (in_degree.get(u) == 0) {
-                q.push(u.data);
+        for (size_t i = 0; i < vertices_.GetLenght(); ++i) {
+            const NodeType& node = vertices_[i];
+            if (in_degree.get(node) == 0) {
+                q.push(node.data);
             }
         }
 
-        std::vector<T> order;
+        ArraySequence<T> order;
         while (!q.empty()) {
             T curr = q.front();
             q.pop();
-            order.push_back(curr);
+            order.Append(curr);
 
-            for (const auto& neighbor : get_neighbors(curr)) {
-                NodeType n_node{neighbor};
-                int& deg = in_degree.get(n_node);
-                deg -= 1;
-                if (deg == 0) {
-                    q.push(neighbor);
+            auto neighbors = get_neighbors(curr);
+            for (size_t i = 0; i < neighbors.GetLenght(); ++i) {
+                NodeType node{neighbors[i]};
+                int& deg = in_degree.get(node);
+                if (--deg == 0) {
+                    q.push(neighbors[i]);
                 }
             }
         }
 
-        if (order.size() != vertices_.size()) {
+        if (order.GetLenght() != vertices_.GetLenght()) {
             throw std::runtime_error("граф содержит цикл");
         }
-
         return order;
     }
 };
