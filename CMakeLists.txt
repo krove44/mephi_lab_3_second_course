@@ -25,8 +25,3 @@ add_executable(tests
 target_link_libraries(tests GTest::gtest_main)
 target_compile_features(tests PRIVATE cxx_std_20)
 
-add_executable(ui
-        ui.cpp
-)
-target_link_libraries(ui PRIVATE Qt6::Widgets Qt6::DataVisualization)
-target_compile_features(ui PRIVATE cxx_std_20)
