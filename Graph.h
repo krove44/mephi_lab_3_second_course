@@ -1,11 +1,11 @@
 #pragma once
 #include <utility>
 #include <optional>
-#include <queue>
-#include <stack>
 #include <algorithm>
 #include <stdexcept>
 #include <concepts>
+#include "../Libs/Queue.h"
+#include "../Libs/Stack.h"
 #include "../Libs/avl_tree.h"
 #include "../mephi_lab2/Sequence/ArraySequence.h"
 
@@ -227,7 +227,7 @@ public:
         if (!has_vertex(start)) return visited_order;
 
         avl_tree<NodeType, bool> visited;
-        std::queue<T> q;
+        Queue<T> q;
         visited.add(NodeType{start}, true);
         q.push(start);
 
@@ -256,7 +256,7 @@ public:
         }
 
         avl_tree<NodeType, bool> visited;
-        std::stack<T> s;
+        Stack<T> s;
         s.push(start);
 
         while (!s.empty()) {
@@ -295,7 +295,7 @@ public:
             }
         }
 
-        std::queue<T> q;
+        Queue<T> q;
         for (size_t i = 0; i < vertices_.GetLenght(); ++i) {
             const NodeType& node = vertices_[i];
             if (in_degree.get(node) == 0) {

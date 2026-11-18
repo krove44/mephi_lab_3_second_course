@@ -3,6 +3,8 @@
 #include <concepts>
 #include <stdexcept>
 #include <utility>
+#include "../Libs/Queue.h"
+#include "../Libs/Stack.h"
 #include "Graph.h"
 
 template <typename T, typename E, bool Directed = false>
@@ -258,4 +260,56 @@ TEST(GraphTest, SpanningTreesOfDisconnectedGraphThrow) {
 
     EXPECT_THROW(g.minimum_spanning_tree(), std::runtime_error);
     EXPECT_THROW(g.maximum_spanning_tree(), std::runtime_error);
+}
+
+
+TEST(QueueTest, FifoAndReuse) {
+    Queue<int> queue;
+    EXPECT_TRUE(queue.empty());
+    EXPECT_THROW(queue.front(), std::out_of_range);
+    EXPECT_THROW(queue.pop(), std::out_of_range);
+    for (int value : {1, 2, 3}) queue.push(value);
+    for (int value : {1, 2, 3}) {
+        EXPECT_EQ(queue.front(), value);
+        EXPECT_EQ(queue.front(), value);
+        queue.pop();
+    }
+    EXPECT_TRUE(queue.empty());
+    for (int value : {1, 2, 1}) queue.push(value);
+    for (int value : {1, 2, 1}) {
+        EXPECT_EQ(queue.front(), value);
+        queue.pop();
+    }
+    EXPECT_TRUE(queue.empty());
+}
+
+TEST(StackTest, LifoAndReuse) {
+    Stack<int> stack;
+    EXPECT_TRUE(stack.empty());
+    EXPECT_THROW(stack.top(), std::out_of_range);
+    EXPECT_THROW(stack.pop(), std::out_of_range);
+    for (int value : {1, 2, 3}) stack.push(value);
+    for (int value : {3, 2, 1}) {
+        EXPECT_EQ(stack.top(), value);
+        EXPECT_EQ(stack.top(), value);
+        stack.pop();
+    }
+    EXPECT_TRUE(stack.empty());
+    for (int value : {1, 2, 1}) stack.push(value);
+    for (int value : {1, 2, 1}) {
+        EXPECT_EQ(stack.top(), value);
+        stack.pop();
+    }
+    EXPECT_TRUE(stack.empty());
+}
+
+TEST(ContainerTest, StringValues) {
+    Queue<std::string> queue;
+    Stack<std::string> stack;
+    for (const auto* word : {"один", "два"}) {
+        queue.push(word);
+        stack.push(word);
+    }
+    EXPECT_EQ(queue.front(), "один");
+    EXPECT_EQ(stack.top(), "два");
 }
