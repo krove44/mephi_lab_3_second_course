@@ -37,6 +37,15 @@ concept HasTopologicalSort = requires(G& g) {
 static_assert(HasTopologicalSort<AvlGraph<int, int, true>>);
 static_assert(!HasTopologicalSort<AvlGraph<int, int, false>>);
 
+template <typename G>
+concept HasSpanningTrees = requires(G& g) {
+    { g.minimum_spanning_tree() } -> std::same_as<G>;
+    { g.maximum_spanning_tree() } -> std::same_as<G>;
+};
+
+static_assert(HasSpanningTrees<AvlGraph<int, int>>);
+static_assert(!HasSpanningTrees<AvlGraph<int, int, true>>);
+
 TEST(GraphTest, VertexOperations) {
     AvlGraph<int, int, true> g;
     EXPECT_TRUE(g.is_directed());
@@ -186,4 +195,67 @@ TEST(GraphTest, TopologicalSortIncludesIsolatedVertex) {
     ASSERT_EQ(sorted.GetLenght(), 3);
     EXPECT_LT(find_index(sorted, 99), sorted.GetLenght());
     EXPECT_LT(find_index(sorted, 1), find_index(sorted, 2));
+}
+
+TEST(GraphTest, MinimumAndMaximumSpanningTrees) {
+    AvlGraph<int, int> g;
+    g.add_edge(1, 2, -3);
+    g.add_edge(1, 3, 6);
+    g.add_edge(2, 3, 0);
+    g.add_edge(2, 4, 4);
+    g.add_edge(3, 4, 2);
+    g.add_edge(1, 1, -100);
+    g.add_edge(4, 4, 100);
+
+    AvlGraph<int, int>  minimum = g.minimum_spanning_tree();
+    AvlGraph<int, int>  maximum = g.maximum_spanning_tree();
+    const ArraySequence<int> vertices{1, 2, 3, 4};
+    expect_sequence_eq(minimum.get_vertices(), vertices);
+    expect_sequence_eq(maximum.get_vertices(), vertices);
+
+    EXPECT_EQ(minimum.get_edge(2, 1), -3);
+    EXPECT_EQ(minimum.get_edge(2, 3), 0);
+    EXPECT_EQ(minimum.get_edge(3, 4), 2);
+    EXPECT_FALSE(minimum.has_edge(1, 3));
+    EXPECT_FALSE(minimum.has_edge(2, 4));
+
+    EXPECT_EQ(maximum.get_edge(1, 3), 6);
+    EXPECT_EQ(maximum.get_edge(2, 4), 4);
+    EXPECT_EQ(maximum.get_edge(3, 4), 2);
+    EXPECT_FALSE(maximum.has_edge(1, 2));
+    EXPECT_FALSE(maximum.has_edge(2, 3));
+
+    EXPECT_FALSE(minimum.has_edge(1, 4));
+    EXPECT_FALSE(maximum.has_edge(1, 4));
+    EXPECT_FALSE(minimum.has_edge(1, 1));
+    EXPECT_FALSE(minimum.has_edge(4, 4));
+    EXPECT_FALSE(maximum.has_edge(1, 1));
+    EXPECT_FALSE(maximum.has_edge(4, 4));
+    EXPECT_EQ(g.get_edge(1, 3), 6);
+    EXPECT_EQ(g.get_edge(1, 2), -3);
+    EXPECT_EQ(minimum.total_edge_weight(), -1);
+    EXPECT_EQ(maximum.total_edge_weight(), 12);
+}
+
+TEST(GraphTest, SpanningTreesOfEmptyAndSingleVertexGraphs) {
+    AvlGraph<int, int> g;
+    EXPECT_EQ(g.minimum_spanning_tree().get_vertices().GetLenght(), 0);
+    EXPECT_EQ(g.maximum_spanning_tree().get_vertices().GetLenght(), 0);
+
+    g.add_edge(42, 42, 5);
+    auto minimum = g.minimum_spanning_tree();
+    auto maximum = g.maximum_spanning_tree();
+    expect_sequence_eq(minimum.get_vertices(), ArraySequence<int>{42});
+    expect_sequence_eq(maximum.get_vertices(), ArraySequence<int>{42});
+    EXPECT_FALSE(minimum.has_edge(42, 42));
+    EXPECT_FALSE(maximum.has_edge(42, 42));
+}
+
+TEST(GraphTest, SpanningTreesOfDisconnectedGraphThrow) {
+    AvlGraph<int, int> g;
+    g.add_edge(1, 2, 5);
+    g.add_vertex(3);
+
+    EXPECT_THROW(g.minimum_spanning_tree(), std::runtime_error);
+    EXPECT_THROW(g.maximum_spanning_tree(), std::runtime_error);
 }

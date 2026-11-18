@@ -40,6 +40,9 @@ template <typename Dict, typename NodeType, typename EdgeType, bool directed_ = 
 requires SpecDictionary<std::pair<NodeType, NodeType>, EdgeType, Dict>
 class Graph {
 private:
+    using T = typename NodeType::value_type;
+    using E = typename EdgeType::weight_type;
+
     using Key = std::pair<NodeType, NodeType>;
     Dict matrix_;
     ArraySequence<NodeType> vertices_;
@@ -51,10 +54,64 @@ private:
         return {u, v};
     }
 
-public:
-    using T = typename NodeType::value_type;
-    using E = typename EdgeType::weight_type;
+    static bool better(const E& lhs, const E& rhs, bool maximum) {
+        if (maximum) {
+            return rhs < lhs;
+        }
+        return lhs < rhs;
+    }
 
+    Graph spanning_tree(bool maximum) requires (!directed_) {
+        struct Candidate {
+            bool in_tree = false;
+            size_t parent = 0;
+            std::optional<typename EdgeType::weight_type> weight;
+        };
+
+        Graph tree;
+        const size_t count = vertices_.GetLenght();
+        if (count == 0) {
+            return tree;
+        }
+        tree.vertices_ = vertices_;
+
+        ArraySequence<Candidate> candidates(count);
+        for (size_t i = 0; i < count; ++i) {
+            candidates.Append(Candidate{});
+        }
+
+        size_t current = 0;
+        for (size_t added = 1; added < count; ++added) {
+            candidates[current].in_tree = true;
+            const auto& from = vertices_[current].data;
+            size_t next = count;
+
+            for (size_t i = 0; i < count; ++i) {
+                auto& candidate = candidates[i];
+                if (candidate.in_tree) {
+                    continue;
+                }
+                const auto weight = get_edge(from, vertices_[i].data);
+                if (weight && (!candidate.weight || better(*weight, *candidate.weight, maximum))) {
+                    candidate.parent = current;
+                    candidate.weight = weight;
+                }
+                if (candidate.weight && (next == count || better(*candidate.weight, *candidates[next].weight, maximum))) {
+                    next = i;
+                }
+            }
+
+            if (next == count) {
+                throw std::runtime_error("граф несвязный");
+            }
+            const auto& chosen = candidates[next];
+            tree.add_edge(vertices_[chosen.parent].data, vertices_[next].data, *chosen.weight);
+            current = next;
+        }
+        return tree;
+    }
+
+public:
     Graph() = default;
 
     bool is_directed() const {
@@ -137,6 +194,32 @@ public:
             }
         }
         return neighbors;
+    }
+
+    Graph minimum_spanning_tree() requires (!directed_) {
+        return spanning_tree(false);
+    }
+
+    Graph maximum_spanning_tree() requires (!directed_) {
+        return spanning_tree(true);
+    }
+
+    E total_edge_weight() requires requires(E& total, const E& weight) {total += weight;} {
+        E total{};
+        const size_t count = vertices_.GetLenght();
+
+        for (size_t i = 0; i < count; ++i) {
+            const size_t first_neighbor = directed_ ? 0 : i;
+
+            for (size_t j = first_neighbor; j < count; ++j) {
+                const auto weight = get_edge(vertices_[i].data, vertices_[j].data);
+                if (weight.has_value()) {
+                    total += *weight;
+                }
+            }
+        }
+
+        return total;
     }
 
     ArraySequence<T> bfs(const T& start) {
