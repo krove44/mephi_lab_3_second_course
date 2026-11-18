@@ -1,35 +1,62 @@
 #include <gtest/gtest.h>
 #include <string>
-#include <vector>
-#include <algorithm>
+#include <concepts>
+#include <stdexcept>
+#include <utility>
 #include "Graph.h"
 
-template <typename T, typename E>
+template <typename T, typename E, bool Directed = false>
 using AvlGraph = Graph<
     avl_tree<std::pair<GraphNode<T>, GraphNode<T>>, GraphEdge<E>>,
     GraphNode<T>,
-    GraphEdge<E>
+    GraphEdge<E>,
+    Directed
 >;
 
+template <typename T>
+void expect_sequence_eq(const ArraySequence<T>& actual, const ArraySequence<T>& expected) {
+    ASSERT_EQ(actual.GetLenght(), expected.GetLenght());
+    for (size_t i = 0; i < expected.GetLenght(); ++i) {
+        EXPECT_EQ(actual[i], expected[i]) << "Index: " << i;
+    }
+}
+
+template <typename T>
+size_t find_index(const ArraySequence<T>& seq, const T& value) {
+    for (size_t i = 0; i < seq.GetLenght(); ++i) {
+        if (seq[i] == value) return i;
+    }
+    return seq.GetLenght();
+}
+
+template <typename G>
+concept HasTopologicalSort = requires(G& g) {
+    g.topological_sort();
+};
+
+static_assert(HasTopologicalSort<AvlGraph<int, int, true>>);
+static_assert(!HasTopologicalSort<AvlGraph<int, int, false>>);
+
 TEST(GraphTest, VertexOperations) {
-    AvlGraph<int, int> g(true);
+    AvlGraph<int, int, true> g;
+    EXPECT_TRUE(g.is_directed());
     EXPECT_FALSE(g.has_vertex(1));
 
     g.add_vertex(1);
     g.add_vertex(2);
-    g.add_vertex(1); // Дубликат
+    g.add_vertex(1);
 
     EXPECT_TRUE(g.has_vertex(1));
     EXPECT_TRUE(g.has_vertex(2));
-    EXPECT_EQ(g.get_vertices().size(), 2);
+    EXPECT_EQ(g.get_vertices().GetLenght(), 2);
 
     g.remove_vertex(1);
     EXPECT_FALSE(g.has_vertex(1));
-    EXPECT_EQ(g.get_vertices().size(), 1);
+    EXPECT_EQ(g.get_vertices().GetLenght(), 1);
 }
 
 TEST(GraphTest, DirectedEdgeOperations) {
-    AvlGraph<int, int> g(true);
+    AvlGraph<int, int, true> g;
 
     g.add_edge(1, 2, 10);
     g.add_edge(2, 3, 20);
@@ -37,18 +64,16 @@ TEST(GraphTest, DirectedEdgeOperations) {
     EXPECT_TRUE(g.has_vertex(1));
     EXPECT_TRUE(g.has_vertex(2));
     EXPECT_TRUE(g.has_vertex(3));
-
     EXPECT_TRUE(g.has_edge(1, 2));
     EXPECT_FALSE(g.has_edge(2, 1));
+    ASSERT_TRUE(g.get_edge(1, 2).has_value());
     EXPECT_EQ(g.get_edge(1, 2).value(), 10);
     EXPECT_EQ(g.get_edge(2, 3).value(), 20);
     EXPECT_FALSE(g.get_edge(1, 3).has_value());
 
-    // Перезапись веса ребра
     g.add_edge(1, 2, 50);
     EXPECT_EQ(g.get_edge(1, 2).value(), 50);
 
-    // Удаление ребра и повторная вставка
     g.remove_edge(1, 2);
     EXPECT_FALSE(g.has_edge(1, 2));
     EXPECT_FALSE(g.get_edge(1, 2).has_value());
@@ -59,19 +84,22 @@ TEST(GraphTest, DirectedEdgeOperations) {
 }
 
 TEST(GraphTest, UndirectedEdgeOperations) {
-    AvlGraph<std::string, double> ug(false);
-    ug.add_edge("Moscow", "SPb", 700.5);
+    AvlGraph<std::string, double, false> g;
+    EXPECT_FALSE(g.is_directed());
 
-    EXPECT_TRUE(ug.has_edge("Moscow", "SPb"));
-    EXPECT_TRUE(ug.has_edge("SPb", "Moscow"));
-    EXPECT_DOUBLE_EQ(ug.get_edge("SPb", "Moscow").value(), 700.5);
+    g.add_edge("Moscow", "SPb", 700.5);
+    EXPECT_TRUE(g.has_edge("Moscow", "SPb"));
+    EXPECT_TRUE(g.has_edge("SPb", "Moscow"));
+    ASSERT_TRUE(g.get_edge("SPb", "Moscow").has_value());
+    EXPECT_DOUBLE_EQ(g.get_edge("SPb", "Moscow").value(), 700.5);
 
-    ug.remove_edge("SPb", "Moscow");
-    EXPECT_FALSE(ug.has_edge("Moscow", "SPb"));
+    g.remove_edge("SPb", "Moscow");
+    EXPECT_FALSE(g.has_edge("Moscow", "SPb"));
+    EXPECT_FALSE(g.has_edge("SPb", "Moscow"));
 }
 
 TEST(GraphTest, RemoveVertexCleansEdges) {
-    AvlGraph<int, int> g(true);
+    AvlGraph<int, int, true> g;
     g.add_edge(1, 2, 5);
     g.add_edge(2, 3, 15);
     g.add_edge(3, 1, 25);
@@ -84,57 +112,78 @@ TEST(GraphTest, RemoveVertexCleansEdges) {
 }
 
 TEST(GraphTest, BFSAndDFSTraversals) {
-    AvlGraph<int, int> g(true);
+    AvlGraph<int, int, true> g;
     g.add_edge(1, 2, 1);
     g.add_edge(1, 3, 1);
     g.add_edge(2, 4, 1);
     g.add_edge(3, 4, 1);
-    g.add_vertex(99); // Изолированная вершина
+    g.add_vertex(99);
 
-    auto bfs_res = g.bfs(1);
-    ASSERT_EQ(bfs_res.size(), 4);
-    EXPECT_EQ(bfs_res[0], 1);
-    EXPECT_EQ(bfs_res[3], 4);
-
-    auto dfs_res = g.dfs(1);
-    ASSERT_EQ(dfs_res.size(), 4);
-    EXPECT_EQ(dfs_res[0], 1);
-
-    EXPECT_TRUE(g.bfs(99).size() == 1);
-    EXPECT_TRUE(g.bfs(500).empty());
+    expect_sequence_eq(g.bfs(1), ArraySequence<int>{1, 2, 3, 4});
+    expect_sequence_eq(g.dfs(1), ArraySequence<int>{1, 2, 4, 3});
+    expect_sequence_eq(g.bfs(99), ArraySequence<int>{99});
+    expect_sequence_eq(g.dfs(99), ArraySequence<int>{99});
+    EXPECT_EQ(g.bfs(500).GetLenght(), 0u);
+    EXPECT_EQ(g.dfs(500).GetLenght(), 0u);
 }
 
 TEST(GraphTest, TopologicalSortValidDAG) {
-    AvlGraph<int, int> dag(true);
-    std::vector<std::pair<int, int>> dependencies = {
+    AvlGraph<int, int, true> dag;
+    const ArraySequence<std::pair<int, int>> dependencies = {
         {5, 2}, {5, 0}, {4, 0}, {4, 1}, {2, 3}, {3, 1}
     };
-
-    for (const auto& [u, v] : dependencies) {
-        dag.add_edge(u, v, 1);
+    for (size_t i = 0; i < dependencies.GetLenght(); ++i) {
+        dag.add_edge(dependencies[i].first, dependencies[i].second, 1);
     }
 
-    std::vector<int> sorted = dag.topological_sort();
-    ASSERT_EQ(sorted.size(), 6);
-
-    auto pos = [&](int val) {
-        auto it = std::find(sorted.begin(), sorted.end(), val);
-        return std::distance(sorted.begin(), it);
-    };
-
-    for (const auto& [u, v] : dependencies) {
-        EXPECT_LT(pos(u), pos(v));
+    const ArraySequence<int> sorted = dag.topological_sort();
+    ASSERT_EQ(sorted.GetLenght(), 6);
+    for (size_t i = 0; i < dependencies.GetLenght(); ++i) {
+        const size_t u_pos = find_index(sorted, dependencies[i].first);
+        const size_t v_pos = find_index(sorted, dependencies[i].second);
+        ASSERT_LT(u_pos, sorted.GetLenght());
+        ASSERT_LT(v_pos, sorted.GetLenght());
+        EXPECT_LT(u_pos, v_pos);
     }
 }
 
-TEST(GraphTest, TopologicalSortExceptions) {
-    AvlGraph<int, int> cyclic(true);
-    cyclic.add_edge(1, 2, 1);
-    cyclic.add_edge(2, 3, 1);
-    cyclic.add_edge(3, 1, 1);
-    EXPECT_THROW(cyclic.topological_sort(), std::runtime_error);
+TEST(GraphTest, TopologicalSortWithSeveralValidOrders) {
+    AvlGraph<int, int, true> dag;
+    dag.add_edge(2, 1);
+    dag.add_edge(2, 3);
 
-    AvlGraph<int, int> undirected(false);
-    undirected.add_edge(1, 2, 1);
-    EXPECT_THROW(undirected.topological_sort(), std::logic_error);
+    const ArraySequence<int> sorted = dag.topological_sort();
+    ASSERT_EQ(sorted.GetLenght(), 3);
+    EXPECT_EQ(sorted[0], 2);
+    EXPECT_TRUE((sorted[1] == 1 && sorted[2] == 3) ||
+                (sorted[1] == 3 && sorted[2] == 1));
+}
+
+TEST(GraphTest, TopologicalSortCycleThrows) {
+    AvlGraph<int, int, true> cyclic;
+    cyclic.add_edge(1, 2);
+    cyclic.add_edge(2, 3);
+    cyclic.add_edge(3, 1);
+    EXPECT_THROW(cyclic.topological_sort(), std::runtime_error);
+}
+
+TEST(GraphTest, TopologicalSortSelfLoopThrows) {
+    AvlGraph<int, int, true> cyclic;
+    cyclic.add_edge(1, 1);
+    EXPECT_THROW(cyclic.topological_sort(), std::runtime_error);
+}
+
+TEST(GraphTest, TopologicalSortEmptyGraph) {
+    AvlGraph<int, int, true> dag;
+    EXPECT_EQ(dag.topological_sort().GetLenght(), 0);
+}
+
+TEST(GraphTest, TopologicalSortIncludesIsolatedVertex) {
+    AvlGraph<int, int, true> dag;
+    dag.add_edge(1, 2);
+    dag.add_vertex(99);
+    const ArraySequence<int> sorted = dag.topological_sort();
+    ASSERT_EQ(sorted.GetLenght(), 3);
+    EXPECT_LT(find_index(sorted, 99), sorted.GetLenght());
+    EXPECT_LT(find_index(sorted, 1), find_index(sorted, 2));
 }

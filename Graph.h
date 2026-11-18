@@ -30,20 +30,19 @@ struct GraphEdge {
 
 template<typename K, typename V, typename D>
 concept SpecDictionary = requires (D dict, K key, V val) {
-    {dict.find(key)} -> std::same_as<bool>;
+    {dict.has_key(key)} -> std::same_as<bool>;
     {dict.add(key, val)};
     {dict.erase(key)};
     {dict.get(key)} -> std::convertible_to<V&>;
 };
 
-template <typename Dict, typename NodeType, typename EdgeType>
+template <typename Dict, typename NodeType, typename EdgeType, bool directed_ = false>
 requires SpecDictionary<std::pair<NodeType, NodeType>, EdgeType, Dict>
 class Graph {
 private:
     using Key = std::pair<NodeType, NodeType>;
     Dict matrix_;
     ArraySequence<NodeType> vertices_;
-    bool directed_;
 
     Key make_key(const NodeType& u, const NodeType& v) const {
         if (!directed_ && v < u) {
@@ -56,7 +55,7 @@ public:
     using T = typename NodeType::value_type;
     using E = typename EdgeType::weight_type;
 
-    Graph(bool directed = true) : directed_(directed) {}
+    Graph() = default;
 
     bool is_directed() const {
         return directed_;
@@ -80,18 +79,15 @@ public:
 
     void remove_vertex(const T& val) {
         NodeType target{val};
-        for (size_t i = 0; i < vertices_.GetLenght(); ++i) {
-            if (vertices_[i] != target) continue;
-
-            for (size_t j = 0; j < vertices_.GetLenght(); ++j) {
-                const NodeType& v = vertices_[j];
+        if (has_vertex(val)) {
+            for (size_t i = 0; i < vertices_.GetLenght(); i++) {
+                const NodeType& v = vertices_[i];
                 matrix_.erase(make_key(target, v));
                 if (directed_) {
                     matrix_.erase(make_key(v, target));
                 }
             }
-            vertices_.EraseAt(i);
-            return;
+            vertices_.Remove(target);
         }
     }
 
@@ -99,7 +95,7 @@ public:
         add_vertex(from);
         add_vertex(to);
         Key k = make_key(NodeType{from}, NodeType{to});
-        if (matrix_.find(k)) {
+        if (matrix_.has_key(k)) {
             EdgeType& e = matrix_.get(k);
             e.weight = weight;
         } else {
@@ -112,7 +108,7 @@ public:
     }
 
     bool has_edge(const T& from, const T& to) {
-        return matrix_.find(make_key(NodeType{from}, NodeType{to}));
+        return matrix_.has_key(make_key(NodeType{from}, NodeType{to}));
     }
 
     std::optional<E> get_edge(const T& from, const T& to) {
@@ -161,7 +157,7 @@ public:
             for (size_t i = 0; i < neighbors.GetLenght(); ++i) {
                 const T& neighbor = neighbors[i];
                 NodeType node{neighbor};
-                if (!visited.find(node)) {
+                if (!visited.has_key(node)) {
                     visited.add(node, true);
                     q.push(neighbor);
                 }
@@ -172,7 +168,9 @@ public:
 
     ArraySequence<T> dfs(const T& start) {
         ArraySequence<T> visited_order;
-        if (!has_vertex(start)) return visited_order;
+        if (!has_vertex(start)) {
+            return visited_order;
+        }
 
         avl_tree<NodeType, bool> visited;
         std::stack<T> s;
@@ -183,14 +181,14 @@ public:
             s.pop();
             NodeType node{curr};
 
-            if (!visited.find(node)) {
+            if (!visited.has_key(node)) {
                 visited.add(node, true);
                 visited_order.Append(curr);
 
                 auto neighbors = get_neighbors(curr);
                 for (size_t i = neighbors.GetLenght(); i > 0; --i) {
                     const T& neighbor = neighbors[i - 1];
-                    if (!visited.find(NodeType{neighbor})) {
+                    if (!visited.has_key(NodeType{neighbor})) {
                         s.push(neighbor);
                     }
                 }
@@ -199,10 +197,7 @@ public:
         return visited_order;
     }
 
-    ArraySequence<T> topological_sort() {
-        if (!directed_) {
-            throw std::logic_error("не ориентированный граф!");
-        }
+    ArraySequence<T> topological_sort() requires directed_ {
 
         avl_tree<NodeType, int> in_degree;
         for (size_t i = 0; i < vertices_.GetLenght(); ++i) {
@@ -231,7 +226,7 @@ public:
             q.pop();
             order.Append(curr);
 
-            auto neighbors = get_neighbors(curr);
+            ArraySequence<T> neighbors = get_neighbors(curr);
             for (size_t i = 0; i < neighbors.GetLenght(); ++i) {
                 NodeType node{neighbors[i]};
                 int& deg = in_degree.get(node);
