@@ -54,7 +54,7 @@ private:
         return {u, v};
     }
 
-    static bool better(const E& lhs, const E& rhs, bool maximum) {
+    bool better(const E& lhs, const E& rhs, bool maximum) {
         if (maximum) {
             return rhs < lhs;
         }
